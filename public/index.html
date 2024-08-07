@@ -44,6 +44,12 @@
         icon : 'bus.png'
       });
 
+      const destinationMarker = new google.maps.Marker({
+        position: { lat: 23.1791642, lng: 75.788654 },
+        map: map,
+        title: 'Destination',
+      });
+
       const directionsService = new google.maps.DirectionsService();
       const directionsRenderer = new google.maps.DirectionsRenderer({ map: map, suppressMarkers: true });
 
