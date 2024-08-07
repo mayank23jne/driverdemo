@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customer Dashboard</title>
+  <style>
+    #map {
+      height: 100vh;
+      width: 100%;
+    }
+    #eta {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: white;
+      padding: 10px;
+      border-radius: 5px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="eta">ETA: Calculating...</div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+  <script>
+    var driverLocation = [];
+   
+    var count = 0;
+
+    // Initialize the map
+    function initMap() {
+      const map = new google.maps.Map(document.getElementById('map'), {
+        zoom: 40,
+        center: { lat: 23.1860842, lng: 75.7971767 } // Initial position at Ujjain
+      });
+
+      const marker = new google.maps.Marker({
+        position: { lat: 23.1860842, lng: 75.7971767 },
+        map: map,
+        title: 'Bus Location',
+        icon : 'bus.png'
+      });
+
+      const directionsService = new google.maps.DirectionsService();
+      const directionsRenderer = new google.maps.DirectionsRenderer({ map: map, suppressMarkers: true });
+
+      const request = {
+        origin: { lat: 23.1860842, lng: 75.7971767 }, // Ujjain
+        destination: { lat: 23.1652669, lng: 75.7889062 }, // Indore
+        travelMode: 'DRIVING'
+      };
+
+      directionsService.route(request, function(result, status) {
+        if (status === 'OK') {
+          directionsRenderer.setDirections(result);
+          const route = result.routes[0];
+                   
+
+                    // Split the route into 50 waypoints
+                    const numWaypoints = 100;
+                    const totalDistance = route.legs[0].distance.value;
+                    const distanceInterval = totalDistance / numWaypoints;
+
+                    let currentDistance = 0;
+                    let accumulatedDistance = 0;
+
+                    route.legs[0].steps.forEach(step => {
+                        const stepDistance = step.distance.value;
+
+                        while (accumulatedDistance + stepDistance > currentDistance) {
+                            const remainingDistance = currentDistance - accumulatedDistance;
+                            const waypointLatLng = google.maps.geometry.spherical.interpolate(
+                                step.start_location,
+                                step.end_location,
+                                remainingDistance / stepDistance
+                            );
+                            driverLocation.push({ lat: waypointLatLng.lat(), lng: waypointLatLng.lng() });
+                            currentDistance += distanceInterval;
+                        }
+
+                        accumulatedDistance += stepDistance;
+                    });
+        }
+      });
+
+      const socket = io();
+      const busId = 1; // Unique ID for the bus the customer is interested in
+
+      socket.on(`busLocationUpdate-${busId}`, (data) => {
+        const { latitude, longitude, eta } = data;
+        const position = new google.maps.LatLng(latitude, longitude);
+        marker.setPosition(position);
+        map.panTo(position);
+
+        document.getElementById('eta').innerText = `ETA: ${eta} minutes`;
+      });
+
+      // setInterval(() => {
+      //   const simulatedLocation = {
+      //     latitude: driverLocation[count]['lat'],
+      //     longitude: driverLocation[count]['lng'],
+      //     busId: 1
+      //   };
+        
+      //   socket.emit('driverLocationUpdate', simulatedLocation);
+      //   count++;
+      //   // if (count >= driverLocation.length) count = 0;
+      // }, 2000);
+    }
+
+    // Load the Google Maps API script
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyDFf3YK0MWDI1dYyVcJONOwdaaXW_eO3aU&callback=initMap`;
+    script.async = true;
+    script.defer = true;
+    document.head.appendChild(script);
+  </script>
+</body>
+</html>

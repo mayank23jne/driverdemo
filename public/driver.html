@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Track User Location</title>
+</head>
+<body>
+    <h1>Tracking User Location</h1>
+    <div id="map"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        // Function to initialize the Google Map
+        function initMap(lat, lng) {
+            var map = new google.maps.Map(document.getElementById('map'), {
+                center: {lat: lat, lng: lng},
+                zoom: 15
+            });
+            var marker = new google.maps.Marker({
+                position: {lat: lat, lng: lng},
+                map: map
+            });
+        }
+
+        // Function to send the coordinates to the server
+        function sendCoordinates(lat, lng) {
+            fetch('/update-location', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({latitude: lat, longitude: lng})
+            })
+            .then(response => response.json())
+            .then(data => console.log('Success:', data))
+            .catch((error) => console.error('Error:', error));
+        }
+
+        // Function to handle position updates
+        function positionUpdate(position) {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            console.log(`Latitude: ${lat}, Longitude: ${lng}`);
+            const simulatedLocation = {
+                latitude: lat,
+                longitude: lng,
+                busId: 1
+            };
+            socket.emit('driverLocationUpdate', simulatedLocation);
+            // initMap(lat, lng);
+            // sendCoordinates(lat, lng);
+        }
+
+        // Check if Geolocation is available
+        if (navigator.geolocation) {
+            navigator.geolocation.watchPosition(positionUpdate, error => {
+                console.error('Error getting location:', error);
+            }, {
+                enableHighAccuracy: true,
+                maximumAge: 0,
+                timeout: 5000
+            });
+        } else {
+            alert("Geolocation is not supported by this browser.");
+        }
+    </script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDFf3YK0MWDI1dYyVcJONOwdaaXW_eO3aU&callback=initMap" async defer></script>
+</body>
+</html>
