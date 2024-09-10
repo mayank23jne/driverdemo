@@ -16,7 +16,7 @@
       background: white;
       padding: 10px;
       border-radius: 5px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     }
   </style>
 </head>
@@ -26,83 +26,185 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
   <script>
-    var driverLocation = [];
-   
-    var count = 0;
+    let map;
+    const vehicleMarkers = {};
+    let token = '';
+
+    function loginAndFetchToken() {
+      fetch('https://ewayits.com/trackmybike/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          mobile_no: 1234567895,
+          password: 123456
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.status && data.code === 200) {
+          token = data.data.token; // Save the token
+          console.log('Token fetched:', token);
+          initMap();  // Initialize the map after getting the token
+        } else {
+          console.error('Login failed:', data.response);
+        }
+      })
+      .catch(error => console.error('Error logging in:', error));
+    }
+
 
     // Initialize the map
     function initMap() {
-      const map = new google.maps.Map(document.getElementById('map'), {
-        zoom: 40,
-        center: { lat: 23.1652669, lng: 75.7889062 } // Initial position at Ujjain
+      map = new google.maps.Map(document.getElementById('map'), {
+        zoom: 14,
+        center: { lat: 23.1652669, lng: 75.7889062 }
       });
 
-      const marker = new google.maps.Marker({
-        position: { lat: 23.1652669, lng: 75.7889062 },
-        map: map,
-        title: 'Bus Location',
-        icon : 'bus.png'
-      });
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(position => {
+          const destination = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          };
 
-      const destinationMarker = new google.maps.Marker({
-        position: { lat: 23.1791642, lng: 75.788654 },
-        map: map,
-        title: 'Destination',
-      });
+          // Add destination marker on the map
+          const destinationMarker = new google.maps.Marker({
+            position: destination,
+            map: map,
+            title: 'Your Location',
+          });
 
-      const directionsService = new google.maps.DirectionsService();
-      const directionsRenderer = new google.maps.DirectionsRenderer({ map: map, suppressMarkers: true });
+          map.setCenter(destination);
+        }, () => {
+          alert('Location access denied. Using default location.');
+        });
+      } else {
+        alert('Geolocation is not supported by this browser.');
+      }
 
-      const request = {
-        origin: { lat: 23.1652669, lng: 75.7889062 }, // Ujjain
-        destination: { lat: 23.1791642, lng: 75.788654 }, // Indore
-        travelMode: 'DRIVING'
-      };
+      fetchVehicleData();
+    }
+    // Function to fetch vehicle data from API and plot on map
+    function fetchVehicleData() {
+      fetch('https://ewayits.com/trackmybike/api/allVehicle', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          token: token
+        })
+      })
+        .then(response => response.json())
+        .then(data => {
+          if (data.status) {
+            const vehicles = data.data;
+            console.log('vehicles', vehicles);
+            vehicles.forEach(vehicle => {
+              if (vehicle.vehicle_lat && vehicle.vehicle_lng) {
+                const position = {
+                  lat: parseFloat(vehicle.vehicle_lat),
+                  lng: parseFloat(vehicle.vehicle_lng)
+                };
 
-      directionsService.route(request, function(result, status) {
-        if (status === 'OK') {
-          directionsRenderer.setDirections(result);
-          const route = result.routes[0];
-                   
+                const marker = new google.maps.Marker({
+                  position: position,
+                  map: map,
+                  title: `Vehicle No: ${vehicle.vehicle_no}`,
+                  icon: 'bus.png'
+                });
+                vehicleMarkers[vehicle.vehicle_id] = marker;
+              }
+            });
 
-                    // Split the route into 50 waypoints
-                    const numWaypoints = 100;
-                    const totalDistance = route.legs[0].distance.value;
-                    const distanceInterval = totalDistance / numWaypoints;
+            initSocketListeners();
+          }
+        })
+        .catch(error => console.error('Error fetching vehicle data:', error));
+    }
 
-                    let currentDistance = 0;
-                    let accumulatedDistance = 0;
-
-                    route.legs[0].steps.forEach(step => {
-                        const stepDistance = step.distance.value;
-
-                        while (accumulatedDistance + stepDistance > currentDistance) {
-                            const remainingDistance = currentDistance - accumulatedDistance;
-                            const waypointLatLng = google.maps.geometry.spherical.interpolate(
-                                step.start_location,
-                                step.end_location,
-                                remainingDistance / stepDistance
-                            );
-                            driverLocation.push({ lat: waypointLatLng.lat(), lng: waypointLatLng.lng() });
-                            currentDistance += distanceInterval;
-                        }
-
-                        accumulatedDistance += stepDistance;
-                    });
-        }
-      });
-
+    function initSocketListeners() {
       const socket = io();
-      const busId = 1; // Unique ID for the bus the customer is interested in
+      console.log("vehicleMarkers", vehicleMarkers);
+      for (const vehicleId in vehicleMarkers) {
+        console.log('vehicleId', vehicleId);
+        socket.on(`busLocationUpdate-${vehicleId}`, data => {
+          console.log("busLocationUpdate", data);
+          // Update the position of the vehicle's marker
+          const marker = vehicleMarkers[vehicleId];
+          if (marker) {
+            const newPosition = {
+              lat: parseFloat(data.vehicle_lat),
+              lng: parseFloat(data.vehicle_lng)
+            };
+            console.log("newPosition", newPosition);
+            marker.setPosition(newPosition);
+          }
+        });
+      }
+    }
 
-      socket.on(`busLocationUpdate-${busId}`, (data) => {
-        const { latitude, longitude, eta } = data;
-        const position = new google.maps.LatLng(latitude, longitude);
-        marker.setPosition(position);
-        map.panTo(position);
+    // const destinationMarker = new google.maps.Marker({
+      //   position: { lat: 23.1791642, lng: 75.788654 },
+      //   map: map,
+      //   title: 'Destination',
+      // });
 
-        document.getElementById('eta').innerText = `ETA: ${eta} minutes`;
-      });
+      // const directionsService = new google.maps.DirectionsService();
+      // const directionsRenderer = new google.maps.DirectionsRenderer({ map: map, suppressMarkers: true });
+
+      // const request = {
+      //   origin: { lat: 23.1652669, lng: 75.7889062 }, // Ujjain
+      //   destination: { lat: 23.1791642, lng: 75.788654 }, // Indore
+      //   travelMode: 'DRIVING'
+      // };
+
+      // directionsService.route(request, function(result, status) {
+      //   if (status === 'OK') {
+      //     directionsRenderer.setDirections(result);
+      //     const route = result.routes[0];
+
+
+      //               // Split the route into 50 waypoints
+      //               const numWaypoints = 100;
+      //               const totalDistance = route.legs[0].distance.value;
+      //               const distanceInterval = totalDistance / numWaypoints;
+
+      //               let currentDistance = 0;
+      //               let accumulatedDistance = 0;
+
+      //               route.legs[0].steps.forEach(step => {
+      //                   const stepDistance = step.distance.value;
+
+      //                   while (accumulatedDistance + stepDistance > currentDistance) {
+      //                       const remainingDistance = currentDistance - accumulatedDistance;
+      //                       const waypointLatLng = google.maps.geometry.spherical.interpolate(
+      //                           step.start_location,
+      //                           step.end_location,
+      //                           remainingDistance / stepDistance
+      //                       );
+      //                       driverLocation.push({ lat: waypointLatLng.lat(), lng: waypointLatLng.lng() });
+      //                       currentDistance += distanceInterval;
+      //                   }
+
+      //                   accumulatedDistance += stepDistance;
+      //               });
+      //   }
+      // });
+
+      // const socket = io();
+      // const busId = 1; // Unique ID for the bus the customer is interested in
+
+      // socket.on(`busLocationUpdate-${busId}`, (data) => {
+      //   const { latitude, longitude, eta } = data;
+      //   const position = new google.maps.LatLng(latitude, longitude);
+      //   marker.setPosition(position);
+      //   map.panTo(position);
+
+      //   document.getElementById('eta').innerText = `ETA: ${eta} minutes`;
+      // });
 
       // setInterval(() => {
       //   const simulatedLocation = {
@@ -110,16 +212,15 @@
       //     longitude: driverLocation[count]['lng'],
       //     busId: 1
       //   };
-        
+
       //   socket.emit('driverLocationUpdate', simulatedLocation);
       //   count++;
       //   // if (count >= driverLocation.length) count = 0;
       // }, 2000);
-    }
 
     // Load the Google Maps API script
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyDFf3YK0MWDI1dYyVcJONOwdaaXW_eO3aU&callback=initMap`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyDFf3YK0MWDI1dYyVcJONOwdaaXW_eO3aU&callback=loginAndFetchToken`;
     script.async = true;
     script.defer = true;
     document.head.appendChild(script);

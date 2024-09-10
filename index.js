@@ -42,14 +42,14 @@ io.on('connection', (socket) => {
 
   // Listen for location updates from drivers
   socket.on('driverLocationUpdate', async (data) => {
-    console.log('in driver location update');
+    console.log('Received driverLocationUpdate', data);
     busLocations[data.busId] = {
       latitude: data.latitude,
       longitude: data.longitude
     };
 
     // Calculate ETA to a fixed destination
-    const eta = await calculateETA(busLocations[data.busId], { latitude: 23.1652669, longitude: 75.7889062 }); // Destination coordinates
+    const eta = await calculateETA(busLocations[data.busId], { latitude: 23.1652669, longitude: 75.7889062 });
     io.emit(`busLocationUpdate-${data.busId}`, { ...data, eta });
   });
 
@@ -57,7 +57,6 @@ io.on('connection', (socket) => {
     console.log('A user disconnected:', socket.id);
   });
 
-  
 });
 
 

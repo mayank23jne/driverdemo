@@ -1,57 +1,185 @@
 <!DOCTYPE html>
 <html>
+
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Track User Location</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f9;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+
+        input[type="text"] {
+            padding: 10px;
+            width: 300px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-right: 10px;
+            font-size: 16px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background-color: #218838;
+        }
+
+        #vehicle-info {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            max-width: 400px;
+            margin: 20px auto;
+            text-align: left;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        #vehicle-info h3 {
+            margin-bottom: 10px;
+        }
+
+        #vehicle-info p {
+            margin: 5px 0;
+            font-size: 14px;
+            color: #555;
+        }
+
+        div {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 600px) {
+
+            input[type="text"],
+            button {
+                width: 94%;
+                margin-bottom: 10px;
+            }
+
+            button {
+                padding: 10px;
+                width: 100%;
+            }
+
+            #vehicle-info {
+                max-width: 94%;
+                padding: 10px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+        }
+    </style>
 </head>
+
 <body>
     <h1>Tracking User Location</h1>
-    <div id="map"></div>
+
+    <div>
+        <input type="text" id="vehicleNo" placeholder="Enter Vehicle No." />
+        <button id="submitVehicle">Start Tracking</button>
+    </div>
+
+    <div id="vehicle-info"></div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
     <script>
         const socket = io();
+        let marker;
+        let busId;
+        let token = '';
+
+        function loginAndFetchToken() {
+      fetch('https://ewayits.com/trackmybike/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          mobile_no: 1234567895,
+          password: 123456
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.status && data.code === 200) {
+          token = data.data.token; // Save the token
+          console.log('Token fetched:', token);
+          initMap();  // Initialize the map after getting the token
+        } else {
+          console.error('Login failed:', data.response);
+        }
+      })
+      .catch(error => console.error('Error logging in:', error));
+    }
+
 
         // Function to initialize the Google Map
         function initMap(lat, lng) {
             var map = new google.maps.Map(document.getElementById('map'), {
-                center: {lat: lat, lng: lng},
+                center: { lat: lat, lng: lng },
                 zoom: 15
             });
             var marker = new google.maps.Marker({
-                position: {lat: lat, lng: lng},
+                position: { lat: lat, lng: lng },
                 map: map
             });
         }
 
         // Function to send the coordinates to the server
-        function sendCoordinates(lat, lng) {
-            fetch('/update-location', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({latitude: lat, longitude: lng})
-            })
-            .then(response => response.json())
-            .then(data => console.log('Success:', data))
-            .catch((error) => console.error('Error:', error));
-        }
+        // function sendCoordinates(lat, lng) {
+        //     fetch('/update-location', {
+        //         method: 'POST',
+        //         headers: {
+        //             'Content-Type': 'application/json'
+        //         },
+        //         body: JSON.stringify({latitude: lat, longitude: lng})
+        //     })
+        //     .then(response => response.json())
+        //     .then(data => console.log('Success:', data))
+        //     .catch((error) => console.error('Error:', error));
+        // }
 
         // Function to handle position updates
         function positionUpdate(position) {
             const lat = position.coords.latitude;
             const lng = position.coords.longitude;
             console.log(`Latitude: ${lat}, Longitude: ${lng}`);
-            const simulatedLocation = {
+
+            // Emit the driver's dynamic location update via Socket.io
+            const driverLocation = {
                 latitude: lat,
                 longitude: lng,
-                busId: 1
+                busId: busId
             };
-            socket.emit('driverLocationUpdate', simulatedLocation);
-            // initMap(lat, lng);
-            // sendCoordinates(lat, lng);
+            console.log('driverLocation', driverLocation);
+            socket.emit('driverLocationUpdate', driverLocation);
+
+            updateMap(lat, lng);
         }
 
-        // Check if Geolocation is available
+        // Check if Geolocation is available and dynamically update position
         if (navigator.geolocation) {
             navigator.geolocation.watchPosition(positionUpdate, error => {
                 console.error('Error getting location:', error);
@@ -63,7 +191,53 @@
         } else {
             alert("Geolocation is not supported by this browser.");
         }
+        // Function to fetch the vehicle data by number
+        function fetchVehicleByNumber(vehicleNo) {
+            fetch('https://ewayits.com/trackmybike/api/SearchVehicle', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    vehicle_no: vehicleNo,
+                    token: token
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status) {
+                        const vehicle = data.data[0];
+                        console.log('Vehicle Data:', vehicle);
+                        busId = vehicle.vehicle_id;
+
+                        // Update vehicle info in the HTML
+                        document.getElementById('vehicle-info').innerHTML = `
+                        <h3>Vehicle Details:</h3>
+                        <p>Vehicle No: ${vehicle.vehicle_no}</p>
+                        <p>Latitude: ${vehicle.vehicle_lat}</p>
+                        <p>Longitude: ${vehicle.vehicle_lng}</p>
+                    `;
+
+                        // Update marker position on the map
+                        updateMap(vehicle.vehicle_lat, vehicle.vehicle_lng, vehicle.vehicle_id);
+                    } else {
+                        document.getElementById('vehicle-info').innerText = "Vehicle not found.";
+                    }
+                })
+                .catch(error => console.error('Error fetching vehicle:', error));
+        }
+        // Add event listener for the submit button
+        document.getElementById('submitVehicle').addEventListener('click', () => {
+            const vehicleNo = document.getElementById('vehicleNo').value;
+            if (vehicleNo) {
+                fetchVehicleByNumber(vehicleNo);
+            } else {
+                alert('Please enter a vehicle number');
+            }
+        });
     </script>
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDFf3YK0MWDI1dYyVcJONOwdaaXW_eO3aU&callback=initMap" async defer></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDFf3YK0MWDI1dYyVcJONOwdaaXW_eO3aU&callback=loginAndFetchToken"
+        async defer></script>
 </body>
+
 </html>
