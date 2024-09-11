@@ -105,8 +105,8 @@
             vehicles.forEach(vehicle => {
               if (vehicle.vehicle_lat && vehicle.vehicle_lng) {
                 const position = {
-                  lat: vehicle.vehicle_lat,
-                  lng: vehicle.vehicle_lng
+                  lat: parseFloat(vehicle.vehicle_lat),
+                  lng: parseFloat(vehicle.vehicle_lng)
                 };
 
                 const marker = new google.maps.Marker({
@@ -136,8 +136,8 @@
           const marker = vehicleMarkers[vehicleId];
           if (marker) {
             const newPosition = {
-              lat: data.vehicle_lat,
-              lng: data.vehicle_lng
+              lat: parseFloat(data.vehicle_lat),
+              lng: parseFloat(data.vehicle_lng)
             };
             console.log("newPosition", newPosition);
             marker.setPosition(newPosition);
