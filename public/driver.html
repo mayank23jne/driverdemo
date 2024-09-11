@@ -111,28 +111,28 @@
         let token = '';
 
         function loginAndFetchToken() {
-      fetch('https://ewayits.com/trackmybike/api/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          mobile_no: 1234567895,
-          password: 123456
-        })
-      })
-      .then(response => response.json())
-      .then(data => {
-        if (data.status && data.code === 200) {
-          token = data.data.token; // Save the token
-          console.log('Token fetched:', token);
-          initMap();  // Initialize the map after getting the token
-        } else {
-          console.error('Login failed:', data.response);
+            fetch('https://ewayits.com/trackmybike/api/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    mobile_no: 1234567895,
+                    password: 123456
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status && data.code === 200) {
+                        token = data.data.token; // Save the token
+                        console.log('Token fetched:', token);
+                        initMap();  // Initialize the map after getting the token
+                    } else {
+                        console.error('Login failed:', data.response);
+                    }
+                })
+                .catch(error => console.error('Error logging in:', error));
         }
-      })
-      .catch(error => console.error('Error logging in:', error));
-    }
 
 
         // Function to initialize the Google Map
@@ -176,21 +176,9 @@
             console.log('driverLocation', driverLocation);
             socket.emit('driverLocationUpdate', driverLocation);
 
-            updateMap(lat, lng);
+            // updateMap(lat, lng);
         }
 
-        // Check if Geolocation is available and dynamically update position
-        if (navigator.geolocation) {
-            navigator.geolocation.watchPosition(positionUpdate, error => {
-                console.error('Error getting location:', error);
-            }, {
-                enableHighAccuracy: true,
-                maximumAge: 0,
-                timeout: 5000
-            });
-        } else {
-            alert("Geolocation is not supported by this browser.");
-        }
         // Function to fetch the vehicle data by number
         function fetchVehicleByNumber(vehicleNo) {
             fetch('https://ewayits.com/trackmybike/api/SearchVehicle', {
@@ -218,8 +206,21 @@
                         <p>Longitude: ${vehicle.vehicle_lng}</p>
                     `;
 
+                        // Check if Geolocation is available and dynamically update position
+                        if (navigator.geolocation) {
+                            navigator.geolocation.watchPosition(positionUpdate, error => {
+                                console.error('Error getting location:', error);
+                            }, {
+                                enableHighAccuracy: true,
+                                maximumAge: 0,
+                                timeout: 5000
+                            });
+                        } else {
+                            alert("Geolocation is not supported by this browser.");
+                        }
+
                         // Update marker position on the map
-                        updateMap(vehicle.vehicle_lat, vehicle.vehicle_lng, vehicle.vehicle_id);
+                        // updateMap(vehicle.vehicle_lat, vehicle.vehicle_lng, vehicle.vehicle_id);
                     } else {
                         document.getElementById('vehicle-info').innerText = "Vehicle not found.";
                     }
@@ -236,7 +237,8 @@
             }
         });
     </script>
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDFf3YK0MWDI1dYyVcJONOwdaaXW_eO3aU&callback=loginAndFetchToken"
+    <script
+        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDFf3YK0MWDI1dYyVcJONOwdaaXW_eO3aU&callback=loginAndFetchToken"
         async defer></script>
 </body>
 
