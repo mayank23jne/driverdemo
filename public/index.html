@@ -136,8 +136,8 @@
           const marker = vehicleMarkers[vehicleId];
           if (marker) {
             const newPosition = {
-              lat: parseFloat(data.vehicle_lat),
-              lng: parseFloat(data.vehicle_lng)
+              lat: parseFloat(data.latitude),
+              lng: parseFloat(data.longitude)
             };
             console.log("newPosition", newPosition);
             marker.setPosition(newPosition);
